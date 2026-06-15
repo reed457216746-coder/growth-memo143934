@@ -60,6 +60,9 @@ const nodes = {
   editForm: $("#editForm"),
   editInput: $("#editInput"),
   editCancel: $("#editCancel"),
+  imageViewer: $("#imageViewer"),
+  imageViewerImg: $("#imageViewerImg"),
+  imageViewerClose: $("#imageViewerClose"),
   toast: $("#toast")
 };
 
@@ -132,6 +135,15 @@ function bindEvents() {
   nodes.editCancel.addEventListener("click", closeEditModal);
   nodes.editModal.addEventListener("click", (event) => {
     if (event.target === nodes.editModal) closeEditModal();
+  });
+  nodes.imageViewerClose.addEventListener("click", closeImageViewer);
+  nodes.imageViewer.addEventListener("click", (event) => {
+    if (event.target === nodes.imageViewer) closeImageViewer();
+  });
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-image-entry]");
+    if (!button) return;
+    openImageViewer(button.dataset.imageEntry, Number(button.dataset.imageIndex));
   });
 }
 
@@ -400,7 +412,7 @@ function renderMemoCard(entry) {
 
 function renderMemoInner(entry) {
   const tags = entry.tags.map((tag) => `<span class="tag">#${escapeHtml(tag)}</span>`).join("");
-  const images = renderMemoImages(entry.images || []);
+  const images = renderMemoImages(entry);
   return `
     <div class="memo-text">${linkTags(escapeHtml(entry.content))}</div>
     ${images}
@@ -413,14 +425,32 @@ function renderMemoInner(entry) {
   `;
 }
 
-function renderMemoImages(images) {
+function renderMemoImages(entry) {
+  const images = entry.images || [];
   const safeImages = images.filter((image) => image?.dataUrl?.startsWith("data:image/"));
   if (!safeImages.length) return "";
   return `
     <div class="memo-images">
-      ${safeImages.map((image, index) => `<img class="memo-image" src="${escapeHtml(image.dataUrl)}" alt="记录图片 ${index + 1}" loading="lazy" />`).join("")}
+      ${safeImages.map((image, index) => `
+        <button class="memo-image-button" type="button" data-image-entry="${escapeHtml(entry.id)}" data-image-index="${index}" aria-label="放大查看图片 ${index + 1}">
+          <img class="memo-image" src="${escapeHtml(image.dataUrl)}" alt="记录图片 ${index + 1}" loading="lazy" />
+        </button>
+      `).join("")}
     </div>
   `;
+}
+
+function openImageViewer(entryId, imageIndex) {
+  const entry = state.entries.find((item) => item.id === entryId);
+  const image = entry?.images?.[imageIndex];
+  if (!image?.dataUrl?.startsWith("data:image/")) return;
+  nodes.imageViewerImg.src = image.dataUrl;
+  nodes.imageViewer.hidden = false;
+}
+
+function closeImageViewer() {
+  nodes.imageViewer.hidden = true;
+  nodes.imageViewerImg.removeAttribute("src");
 }
 
 function bindCardActions(root) {

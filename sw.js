@@ -1,4 +1,4 @@
-const cacheName = "growth-memo-v2";
+const cacheName = "growth-memo-v3";
 const files = [
   "./",
   "./index.html",
