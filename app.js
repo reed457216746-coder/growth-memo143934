@@ -7,6 +7,7 @@ const starterEntries = [
     tags: ["复盘"],
     mood: "清醒",
     goal: "学习",
+    images: [],
     starred: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -17,6 +18,8 @@ let state = loadState();
 let activeView = "write";
 let activeTag = "";
 let randomEntryId = "";
+let selectedImages = [];
+let editingEntryId = "";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -25,6 +28,8 @@ const nodes = {
   todayLine: $("#todayLine"),
   form: $("#memoForm"),
   input: $("#memoInput"),
+  imageInput: $("#imageInput"),
+  imagePreview: $("#imagePreview"),
   draftState: $("#draftState"),
   mood: $("#moodSelect"),
   goal: $("#goalSelect"),
@@ -51,6 +56,10 @@ const nodes = {
   exportButton: $("#exportButton"),
   importInput: $("#importInput"),
   themeToggle: $("#themeToggle"),
+  editModal: $("#editModal"),
+  editForm: $("#editForm"),
+  editInput: $("#editInput"),
+  editCancel: $("#editCancel"),
   toast: $("#toast")
 };
 
@@ -82,7 +91,14 @@ function loadState() {
 }
 
 function saveState() {
-  localStorage.setItem(storeKey, JSON.stringify(state));
+  try {
+    localStorage.setItem(storeKey, JSON.stringify(state));
+    return true;
+  } catch (error) {
+    console.warn(error);
+    showToast("空间不够了，先导出备份或少放几张图片");
+    return false;
+  }
 }
 
 function bindEvents() {
@@ -91,6 +107,8 @@ function bindEvents() {
   nodes.input.addEventListener("input", () => {
     nodes.draftState.textContent = nodes.input.value.trim() ? "正在写" : "已准备";
   });
+
+  nodes.imageInput.addEventListener("change", handleImageSelect);
 
   $$(".chip[data-insert]").forEach((button) => {
     button.addEventListener("click", () => insertAtCursor(`${button.dataset.insert} `));
@@ -110,6 +128,11 @@ function bindEvents() {
   nodes.exportButton.addEventListener("click", exportData);
   nodes.importInput.addEventListener("change", importData);
   nodes.themeToggle.addEventListener("click", cycleTheme);
+  nodes.editForm.addEventListener("submit", saveEditedEntry);
+  nodes.editCancel.addEventListener("click", closeEditModal);
+  nodes.editModal.addEventListener("click", (event) => {
+    if (event.target === nodes.editModal) closeEditModal();
+  });
 }
 
 function switchView(view) {
@@ -133,6 +156,7 @@ function saveMemo(event) {
     id: makeId(),
     content,
     tags: parseTags(content),
+    images: selectedImages,
     mood: nodes.mood.value,
     goal: nodes.goal.value,
     starred: false,
@@ -141,11 +165,79 @@ function saveMemo(event) {
   };
 
   state.entries.unshift(entry);
-  saveState();
+  if (!saveState()) {
+    state.entries.shift();
+    return;
+  }
   nodes.input.value = "";
+  clearSelectedImages();
   nodes.draftState.textContent = "已保存";
   showToast("保存好了");
   render();
+}
+
+async function handleImageSelect(event) {
+  const files = [...(event.target.files || [])].slice(0, 3 - selectedImages.length);
+  if (!files.length) return;
+
+  nodes.draftState.textContent = "正在处理图片";
+  try {
+    const compressed = await Promise.all(files.map(compressImage));
+    selectedImages = [...selectedImages, ...compressed].slice(0, 3);
+    renderImagePreview();
+    nodes.draftState.textContent = "图片已添加";
+  } catch (error) {
+    console.warn(error);
+    showToast("图片处理失败，换一张试试");
+  }
+  event.target.value = "";
+}
+
+function renderImagePreview() {
+  nodes.imagePreview.innerHTML = selectedImages
+    .map((image, index) => `<img class="image-thumb" src="${image.dataUrl}" alt="待保存图片 ${index + 1}" />`)
+    .join("");
+}
+
+function clearSelectedImages() {
+  selectedImages = [];
+  nodes.imagePreview.innerHTML = "";
+  nodes.imageInput.value = "";
+}
+
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("not image"));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = reject;
+      image.onload = () => {
+        const maxSide = 1280;
+        const ratio = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * ratio));
+        const height = Math.max(1, Math.round(image.height * ratio));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, width, height);
+        resolve({
+          name: file.name,
+          type: "image/jpeg",
+          dataUrl: canvas.toDataURL("image/jpeg", 0.78),
+          createdAt: new Date().toISOString()
+        });
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function parseTags(text) {
@@ -308,13 +400,25 @@ function renderMemoCard(entry) {
 
 function renderMemoInner(entry) {
   const tags = entry.tags.map((tag) => `<span class="tag">#${escapeHtml(tag)}</span>`).join("");
+  const images = renderMemoImages(entry.images || []);
   return `
     <div class="memo-text">${linkTags(escapeHtml(entry.content))}</div>
+    ${images}
     <div class="memo-meta">
       <span>${formatDate(entry.createdAt, "minute")}</span>
       <span class="mood-pill">${escapeHtml(entry.mood)}</span>
       <span class="goal-pill">${escapeHtml(entry.goal)}</span>
       ${tags}
+    </div>
+  `;
+}
+
+function renderMemoImages(images) {
+  const safeImages = images.filter((image) => image?.dataUrl?.startsWith("data:image/"));
+  if (!safeImages.length) return "";
+  return `
+    <div class="memo-images">
+      ${safeImages.map((image, index) => `<img class="memo-image" src="${escapeHtml(image.dataUrl)}" alt="记录图片 ${index + 1}" loading="lazy" />`).join("")}
     </div>
   `;
 }
@@ -343,9 +447,17 @@ function toggleStar(id) {
 function editEntry(id) {
   const entry = state.entries.find((item) => item.id === id);
   if (!entry) return;
-  const next = prompt("编辑这条记录", entry.content);
-  if (next === null) return;
-  const content = next.trim();
+  editingEntryId = id;
+  nodes.editInput.value = entry.content;
+  nodes.editModal.hidden = false;
+  setTimeout(() => nodes.editInput.focus(), 0);
+}
+
+function saveEditedEntry(event) {
+  event.preventDefault();
+  const entry = state.entries.find((item) => item.id === editingEntryId);
+  if (!entry) return;
+  const content = nodes.editInput.value.trim();
   if (!content) {
     showToast("内容不能为空");
     return;
@@ -353,9 +465,16 @@ function editEntry(id) {
   entry.content = content;
   entry.tags = parseTags(content);
   entry.updatedAt = new Date().toISOString();
-  saveState();
+  if (!saveState()) return;
+  closeEditModal();
   render();
   showToast("已更新");
+}
+
+function closeEditModal() {
+  editingEntryId = "";
+  nodes.editInput.value = "";
+  nodes.editModal.hidden = true;
 }
 
 function deleteEntry(id) {
@@ -449,7 +568,7 @@ function applyTheme() {
 
 function normalizeState(next) {
   return {
-    entries: next.entries,
+    entries: next.entries.map((entry) => ({ ...entry, images: entry.images || [] })),
     goals: next.goals.length ? next.goals : defaultGoals,
     settings: next.settings || { theme: "system" }
   };

@@ -33,6 +33,15 @@
             </div>
             <textarea id="memoInput" rows="8" placeholder="写一句也可以。比如：#复盘 今天注意力最好的时间是上午十点。"></textarea>
 
+            <div class="image-picker">
+              <label class="image-button">
+                添加图片
+                <input id="imageInput" type="file" accept="image/*" multiple />
+              </label>
+              <span id="imageHint">最多 3 张，会自动压缩</span>
+            </div>
+            <div class="image-preview" id="imagePreview"></div>
+
             <div class="tool-row" aria-label="常用标签">
               <button type="button" class="chip" data-insert="#复盘">#复盘</button>
               <button type="button" class="chip" data-insert="#学习">#学习</button>
@@ -183,6 +192,16 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="modal-backdrop" id="editModal" hidden>
+      <form class="edit-dialog" id="editForm">
+        <div class="section-title">
+          <h2>编辑记录</h2>
+          <button class="plain-button" id="editCancel" type="button">取消</button>
+        </div>
+        <textarea id="editInput" rows="10"></textarea>
+        <button class="primary-button" type="submit">保存修改</button>
+      </form>
+    </div>
     <script src="./app.js" defer></script>
   </body>
 </html>
