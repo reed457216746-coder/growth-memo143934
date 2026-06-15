@@ -1,0 +1,29 @@
+{
+  "name": "生长备忘录",
+  "short_name": "备忘录",
+  "description": "极简记录、随机回看和个人成长复盘。",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f7f8f3",
+  "theme_color": "#28c76f",
+  "icons": [
+    {
+      "src": "./assets/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
